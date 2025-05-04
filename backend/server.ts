@@ -2,43 +2,70 @@ import dotenv from "dotenv";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import OpenAI from "openai";
+import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
 
 dotenv.config();
 
-// --- Type Definitions ---
-interface UserProfile {
+// --- Zod Schema Definitions ---
+const ExerciseSchema = z
+  .object({
+    exerciseId: z
+      .string()
+      .describe("Unique ID for the exercise, e.g., gen-<uuid>"),
+    problemArea: z
+      .string()
+      .describe("The specific grammar or vocabulary area targeted"),
+    proficiencyLevel: z.string().describe("CEFR level (A1-C2)"),
+    topic: z.string().describe("The general topic of the exercise"),
+    keyWords: z
+      .array(z.string())
+      .describe("1-2 diverse keywords to be used in the sentence"),
+    instructions: z.string().describe("Clear instructions for the user"),
+    context: z.string().describe("Contextual information for the sentence"),
+  })
+  .required()
+  .describe("Schema for a German sentence exercise");
+
+const GrammarNoteSchema = z
+  .object({
+    rule: z.string().describe("The grammar rule explained"),
+    example: z.string().optional().describe("An example illustrating the rule"),
+  })
+  .required();
+
+const GradingResultSchema = z
+  .object({
+    isCorrect: z
+      .boolean()
+      .describe("Whether the user's answer is considered correct"),
+    score: z.number().describe("A score between 0.0 and 1.0"),
+    feedback: z.string().describe("Concise overall feedback on the answer"),
+    suggestions: z
+      .string()
+      .optional()
+      .describe("A helpful suggestion for improvement"),
+    grammarNotes: z
+      .array(GrammarNoteSchema)
+      .optional()
+      .describe("Specific grammar notes if incorrect"),
+  })
+  .required()
+  .describe("Schema for grading feedback on a German sentence");
+
+// --- Type Definitions (derived from Zod) ---
+type Exercise = z.infer<typeof ExerciseSchema>;
+type GradingResult = z.infer<typeof GradingResultSchema>;
+type UserProfile = {
   proficiencyLevel: string;
   problemAreas: string[];
   // Add other profile fields if they exist
-}
-
-interface Exercise {
-  exerciseId: string;
-  problemArea: string;
-  proficiencyLevel: string;
-  topic: string;
-  keyWords: string[];
-  instructions: string;
-  context: string;
-}
-
-interface GrammarNote {
-  rule: string;
-  example?: string; // Example might be optional
-}
-
-interface GradingResult {
-  isCorrect: boolean;
-  score: number;
-  feedback: string;
-  suggestions?: string; // Suggestions might be optional
-  grammarNotes?: GrammarNote[]; // Grammar notes might be optional
-}
+};
 
 interface ApiRequestBody {
   action: "generateExercise" | "gradeSentence";
   userProfile?: UserProfile;
-  exercise?: Exercise;
+  exercise?: Exercise; // Use inferred type
   userAnswer?: string;
 }
 
@@ -66,58 +93,45 @@ async function handleGenerateExercise(
     userProfile.problemAreas.length > 0
       ? userProfile.problemAreas.join(", ")
       : "general grammar";
-  const prompt: string = `Generate a German sentence exercise for a ${userProfile.proficiencyLevel} learner focusing on ${problemAreas}. Provide topic, 1-2 diverse and less common keywords related to the topic (avoid overly frequent words like 'essen' or 'Frühstück' unless highly relevant), instructions, context, and the specific problem area being targeted (must be one of: ${problemAreas}). Output ONLY valid JSON in this exact format: { "exerciseId": "gen-<uuid>", "problemArea": "...", "proficiencyLevel": "${userProfile.proficiencyLevel}", "topic": "...", "keyWords": ["...", "..."], "instructions": "...", "context": "..." }`;
+  const prompt: string = `Generate a German sentence exercise for a ${userProfile.proficiencyLevel} learner focusing on ${problemAreas}. Provide topic, 1-2 diverse and less common keywords related to the topic (avoid overly frequent words like 'essen' or 'Frühstück' unless highly relevant), instructions, context, and the specific problem area being targeted (must be one of: ${problemAreas}). Adhere strictly to the provided JSON schema.`; // Updated prompt slightly
 
   try {
     console.log("Sending prompt to LLM for exercise generation...");
-    const completion = await openai.chat.completions.create({
+    // Use the new parse method with zodResponseFormat
+    const completion = await openai.beta.chat.completions.parse({
       model: llmModel,
       messages: [
         {
           role: "system",
           content:
-            "You are an assistant generating German language exercises in a specific JSON format. Output ONLY the JSON object.",
+            "You are an assistant generating German language exercises. Respond in English",
         },
         { role: "user", content: prompt },
       ],
-      response_format: { type: "json_object" },
+      response_format: zodResponseFormat(ExerciseSchema, "exercise_details"), // Use Zod schema
       temperature: 0.8,
     });
 
-    const responseContent: string | null =
-      completion.choices[0].message.content;
-    console.log("LLM Raw Response (Exercise):", responseContent);
+    const message = completion.choices[0].message;
 
-    if (!responseContent) {
-      throw new Error("LLM returned empty content");
+    // Handle potential refusal
+    if (message.refusal) {
+      console.error("LLM refused to generate exercise:", message.refusal);
+      throw new Error(`LLM refused request: ${message.refusal}`);
     }
 
-    let result: Exercise;
-    try {
-      // We assume the LLM returns the correct structure, but add basic validation below
-      result = JSON.parse(responseContent) as Exercise;
-    } catch (parseError: any) {
-      console.error("Failed to parse LLM JSON response:", parseError);
-      console.error("Raw response was:", responseContent);
-      throw new Error(
-        `LLM returned invalid JSON format: ${parseError.message}`
+    // Access the parsed result directly
+    const result = message.parsed;
+
+    if (!result) {
+      // This case should be less likely with zodResponseFormat but good to keep
+      console.error(
+        "LLM response parsing failed despite using zodResponseFormat"
       );
+      throw new Error("Failed to parse LLM response.");
     }
 
-    // Basic validation of the parsed structure
-    if (
-      !result.exerciseId ||
-      !result.topic ||
-      !result.keyWords ||
-      !result.instructions ||
-      !result.problemArea ||
-      !result.proficiencyLevel ||
-      !result.context
-    ) {
-      console.error("LLM JSON missing required fields:", result);
-      throw new Error("LLM JSON missing required fields");
-    }
-
+    // Zod handles the validation, so manual checks can be removed
     console.log("Parsed LLM Response (Exercise):", result);
     return result;
   } catch (error: any) {
@@ -125,6 +139,10 @@ async function handleGenerateExercise(
       "Error calling OpenAI or processing response for exercise generation:",
       error
     );
+    // Check if it's an OpenAI API error for more details
+    if (error instanceof OpenAI.APIError) {
+      throw new Error(`OpenAI API Error (${error.status}): ${error.message}`);
+    }
     throw new Error(`Failed to generate exercise from LLM: ${error.message}`);
   }
 }
@@ -142,58 +160,47 @@ async function handleGradeSentence(
     exercise.problemArea
   }, using keywords ${exercise.keyWords.join(
     ", "
-  )}. Assess correctness (true/false), grammar, keyword usage, and relevance. Provide a score (0.0-1.0), concise feedback, a helpful suggestion, and specific grammar notes if incorrect. Output ONLY valid JSON in this exact format: { "isCorrect": boolean, "score": float, "feedback": "...", "suggestions": "...", "grammarNotes": [{ "rule": "...", "example": "..." }] }`;
+  )}. Assess correctness (true/false), grammar, keyword usage, and relevance. Provide a score (0.0-1.0), concise feedback, a helpful suggestion, and specific grammar notes if incorrect. Adhere strictly to the provided JSON schema.`; // Updated prompt slightly
 
   try {
     console.log("Sending prompt to LLM for grading...");
-    const completion = await openai.chat.completions.create({
+    // Use the new parse method with zodResponseFormat
+    const completion = await openai.beta.chat.completions.parse({
       model: llmModel,
       messages: [
         {
           role: "system",
           content:
-            "You are an assistant grading German language sentences and providing feedback in a specific JSON format. Output ONLY the JSON object.",
+            "You are an assistant grading German language sentences. Respond in English.",
         },
         { role: "user", content: prompt },
       ],
-      response_format: { type: "json_object" },
+      response_format: zodResponseFormat(
+        GradingResultSchema,
+        "grading_feedback"
+      ), // Use Zod schema
       temperature: 0.5,
     });
 
-    const responseContent: string | null =
-      completion.choices[0].message.content;
-    console.log("LLM Raw Response (Grading):", responseContent);
+    const message = completion.choices[0].message;
 
-    if (!responseContent) {
-      throw new Error("LLM returned empty content");
+    // Handle potential refusal
+    if (message.refusal) {
+      console.error("LLM refused to grade sentence:", message.refusal);
+      throw new Error(`LLM refused request: ${message.refusal}`);
     }
 
-    let result: GradingResult;
-    try {
-      // Assume correct structure, validate below
-      result = JSON.parse(responseContent) as GradingResult;
-    } catch (parseError: any) {
-      console.error("Failed to parse LLM JSON response:", parseError);
-      console.error("Raw response was:", responseContent);
-      throw new Error(
-        `LLM returned invalid JSON format: ${parseError.message}`
+    // Access the parsed result directly
+    const result = message.parsed;
+
+    if (!result) {
+      console.error(
+        "LLM response parsing failed despite using zodResponseFormat"
       );
+      throw new Error("Failed to parse LLM response.");
     }
 
-    // Basic validation of the parsed structure
-    if (
-      typeof result.isCorrect !== "boolean" ||
-      typeof result.score !== "number" ||
-      !result.feedback
-    ) {
-      console.error("LLM JSON missing required fields:", result);
-      throw new Error("LLM JSON missing required fields");
-    }
-
-    // Ensure optional fields are at least present (even if empty array/undefined)
-    result.suggestions = result.suggestions ?? undefined;
-    result.grammarNotes = result.grammarNotes ?? undefined;
-
+    // Zod handles validation
     console.log("Parsed LLM Response (Grading):", result);
     return result;
   } catch (error: any) {
@@ -201,6 +208,9 @@ async function handleGradeSentence(
       "Error calling OpenAI or processing response for grading:",
       error
     );
+    if (error instanceof OpenAI.APIError) {
+      throw new Error(`OpenAI API Error (${error.status}): ${error.message}`);
+    }
     throw new Error(`Failed to grade sentence with LLM: ${error.message}`);
   }
 }
