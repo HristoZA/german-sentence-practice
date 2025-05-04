@@ -1,5 +1,10 @@
 # German Sentence Construction App - Progress Tracker
 
+## Project Structure
+- `frontend/`: Contains the Vue.js application (Vite, Tailwind CSS).
+- `backend/`: Placeholder for the backend service (Node.js/Python).
+- `LLM_README.md`: This file.
+
 ## Instructions for LLM
 This markdown file serves as a progress tracker for the development of the German sentence construction app. You should:
 
@@ -8,45 +13,49 @@ This markdown file serves as a progress tracker for the development of the Germa
 3. Add notes in the "Development Notes" section for important decisions or challenges
 4. Track any bugs or issues in the "Known Issues" section
 5. Use the structured data examples to ensure consistent output formats
+6. no // comments in VUE code, (script tag is fine, but actual vue templates no.)
 
 ## Project Components
 
 ### Backend Setup
-- [ ] Initialize project structure
-- [ ] Set up API routes
-- [ ] Implement LLM integration (GPT4o-mini)
-- [ ] Create open-ended exercise generation logic
-- [ ] Create flexible sentence grading logic
-- [ ] Implement cookie-based user session management
-- [ ] Set up data structure for user profiles
+- [x] Initialize project structure (Node.js/Express)
+- [x] Set up API endpoint (`/api/llm`)
+- [x] Implement secure LLM API key management (`.env`)
+- [x] Implement LLM integration (GPT-4o mini using `openai` package)
+- [x] Create prompt template for open-ended exercise generation
+- [x] Create prompt template for flexible sentence grading
+- [x] Implement logic to parse LLM responses into structured JSON
+- [x] Handle potential LLM API errors
 
 ### Frontend Development
-- [x] Set up Vue.js project with Tailwind CSS
-- [ ] Create responsive layout
-- [ ] Implement user profile management UI
-- [ ] Design minimal exercise display components (`ExerciseDisplay.vue`)
-- [ ] Create sentence submission form
-- [ ] Design feedback display components
-- [ ] Implement progress tracking visualization
+- [x] Set up Vue.js project with Vite and Tailwind CSS
+- [x] Create responsive layout (`App.vue`)
+- [x] Implement user profile management UI (`ProgressDisplay.vue`)
+- [x] Design minimal exercise display components (`ExerciseDisplay.vue`)
+- [x] Create sentence submission form (`App.vue`)
+- [x] Design feedback display components (`FeedbackDisplay.vue`)
+- [x] Implement progress tracking visualization (`ProgressDisplay.vue`)
+- [x] Add mock LLM utility (`src/utils/llm.js`)
+- [x] Add basic input validation
 
 ### User Profile Management
-- [ ] Create data structure for user profiles
-- [ ] Implement proficiency level tracking (A1-C2)
-- [ ] Create problem areas management
-- [ ] Set up cookie-based storage
+- [x] Create data structure for user profiles (`src/utils/userProfile.js`)
+- [x] Implement proficiency level tracking (A1-C2)
+- [x] Create problem areas management (dynamic addition)
+- [x] Set up cookie-based storage (`js-cookie`, `src/utils/userProfile.js`)
 
 ### Exercise System
-- [ ] Define open-ended exercise format
-- [ ] Create prompt templates for topic and keyword generation
-- [ ] Implement grading rubric for open-ended responses
-- [ ] Design adaptive difficulty progression
+- [ ] Define open-ended exercise format (JSON structure defined)
+- [ ] Create prompt templates for topic and keyword generation (Backend task)
+- [ ] Implement grading rubric for open-ended responses (Backend task)
+- [ ] Design adaptive difficulty progression (Backend task, using user profile)
 
 ### Testing and Optimization
-- [ ] Test exercise generation variety
-- [ ] Test grading flexibility and accuracy
-- [ ] Optimize LLM prompt performance
-- [ ] User experience testing
-- [ ] Performance optimization
+- [ ] Test exercise generation variety (Backend/LLM task)
+- [ ] Test grading flexibility and accuracy (Backend/LLM task)
+- [ ] Optimize LLM prompt performance (Backend/LLM task)
+- [ ] User experience testing (Frontend)
+- [ ] Performance optimization (Frontend/Backend)
 
 ## Structured Data Examples
 
@@ -98,9 +107,20 @@ This markdown file serves as a progress tracker for the development of the Germa
 - Exercise difficulty should adapt based on user proficiency level
 - Grading should be flexible, allowing for multiple correct solutions
 - Cleaned up default Vue components (`App.vue`, removed `HelloWorld.vue`).
+- Frontend components (Exercise, Feedback, Progress) are implemented.
+- User profile (level, problem areas, stats) persists via cookies.
+- Mock LLM utility (`llm.js`) simulates API calls for frontend development.
+- Added ability for users to manually change proficiency level.
 
 ## Known Issues
-- List any bugs or issues here as they are discovered
+- Tailwind CSS required `@tailwindcss/postcss` package and config update.
+- `npm run dev` initially failed due to PostCSS configuration issue (resolved).
 
 ## Next Steps
-- Outline the immediate next tasks to work on
+- [ ] Test exercise generation variety (Backend/LLM task)
+- [ ] Test grading flexibility and accuracy (Backend/LLM task)
+- [ ] Optimize LLM prompt performance (Backend/LLM task)
+- [ ] User experience testing (Frontend)
+- [ ] Performance optimization (Frontend/Backend)
+- [ ] Consider adding more robust error handling and UI feedback for API issues.
+- [ ] Prepare for deployment (e.g., configure CORS for production, build frontend).
