@@ -12,6 +12,15 @@
       <p>{{ exercise.context }}</p>
     </div>
 
+    <div class="examples">
+      <h4>Example sentences:</h4>
+      <ul>
+        <li v-for="(sentence, index) in exercise.exampleSentences" :key="index">
+          "{{ sentence }}"
+        </li>
+      </ul>
+    </div>
+
     <div class="key-words">
       <h4>Use these words:</h4>
       <ul>
@@ -47,6 +56,7 @@ h4 {
 
 .instructions,
 .context,
+.examples,
 .key-words {
   margin-bottom: 15px;
   padding: 10px;
@@ -61,6 +71,22 @@ h4 {
 .context {
   background-color: #f0fdf4; /* Light green */
   border: 1px solid #dcfce7; /* Lighter green border */
+}
+
+.examples {
+  background-color: #f1f5f9; /* Light slate */
+  border: 1px solid #cbd5e1; /* Lighter slate border */
+}
+
+.examples ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.examples li {
+  margin-bottom: 8px;
+  font-style: italic;
 }
 
 .key-words {

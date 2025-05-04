@@ -23,6 +23,11 @@ const ExerciseSchema = z
       .describe("1-2 diverse keywords to be used in the sentence"),
     instructions: z.string().describe("Clear instructions for the user"),
     context: z.string().describe("Contextual information for the sentence"),
+    exampleSentences: z
+      .array(z.string())
+      .describe(
+        "Two example sentences related to the activity, but not using the exact keywords"
+      ),
   })
   .required()
   .describe("Schema for a German sentence exercise");
@@ -59,7 +64,7 @@ type GradingResult = z.infer<typeof GradingResultSchema>;
 type UserProfile = {
   proficiencyLevel: string;
   problemAreas: string[];
-  // Add other profile fields if they exist
+  focusArea?: string; // Optional property for the selected grammar topic to focus on
 };
 
 interface ApiRequestBody {
@@ -89,11 +94,30 @@ async function handleGenerateExercise(
   userProfile: UserProfile
 ): Promise<Exercise> {
   console.log("Generating exercise for profile:", userProfile);
-  const problemAreas: string =
-    userProfile.problemAreas.length > 0
-      ? userProfile.problemAreas.join(", ")
-      : "general grammar";
-  const prompt: string = `Generate a German sentence exercise for a ${userProfile.proficiencyLevel} learner focusing on ${problemAreas}. Provide topic, 1-2 diverse and less common keywords related to the topic (avoid overly frequent words like 'essen' or 'Frühstück' unless highly relevant), instructions, context, and the specific problem area being targeted (must be one of: ${problemAreas}). Adhere strictly to the provided JSON schema.`; // Updated prompt slightly
+
+  // Determine the focus area - prioritize the user selected focus area if available
+  let targetFocusArea: string = "general grammar";
+  if (userProfile.focusArea && userProfile.focusArea.trim() !== "") {
+    // User has selected a specific focus area
+    targetFocusArea = userProfile.focusArea;
+    console.log(`Using user selected focus area: ${targetFocusArea}`);
+  } else if (userProfile.problemAreas.length > 0) {
+    // Fall back to problem areas if no specific focus area selected
+    targetFocusArea = userProfile.problemAreas.join(", ");
+    console.log(`Using problem areas: ${targetFocusArea}`);
+  }
+
+  const prompt: string = `Generate a German sentence exercise for a ${userProfile.proficiencyLevel} learner focusing specifically on "${targetFocusArea}". 
+  
+  Provide:
+  - topic: something interesting and relevant to the grammar focus
+  - 1-2 diverse and less common keywords related to the topic (avoid overly frequent words like 'essen' or 'Frühstück' unless highly relevant)
+  - instructions: clear directions on how to form the sentence using the grammar point
+  - context: brief scenario to help frame the sentence
+  - problemArea: set this exactly to "${targetFocusArea}" as this is what the user wants to practice
+  - TWO example sentences in German that demonstrate similar grammar or vocabulary usage, but do NOT use the exact keywords you've provided. These should help the learner understand what kind of sentence to create.
+  
+  Adhere strictly to the provided JSON schema.`;
 
   try {
     console.log("Sending prompt to LLM for exercise generation...");
@@ -104,11 +128,11 @@ async function handleGenerateExercise(
         {
           role: "system",
           content:
-            "You are an assistant generating German language exercises. Respond in English",
+            "You are an assistant generating German language exercises. Respond in English, but include German example sentences.",
         },
         { role: "user", content: prompt },
       ],
-      response_format: zodResponseFormat(ExerciseSchema, "exercise_details"), // Use Zod schema
+      response_format: zodResponseFormat(ExerciseSchema, "exercise_details"),
       temperature: 0.8,
     });
 

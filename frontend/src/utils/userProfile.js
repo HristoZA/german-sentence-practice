@@ -6,7 +6,8 @@ const PROFILE_COOKIE_NAME = 'germanAppUserProfile';
 // Default profile structure
 const defaultProfile = {
   proficiencyLevel: 'A1',
-  problemAreas: ['word-order'],
+  problemAreas: [],
+  focusArea: '', // Added focus area for selected grammar topic
   // Add other fields as needed, matching LLM_README.md
   exercisesCompleted: 0,
   correctAnswers: 0,

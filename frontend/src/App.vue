@@ -87,6 +87,7 @@
           <ProgressDisplay
             :user-profile="userProfile"
             @update:level="handleLevelUpdate"
+            @update:focusArea="handleFocusAreaUpdate"
           />
         </div>
       </div>
@@ -229,10 +230,17 @@ function handleLevelUpdate(newLevel) {
   Object.assign(userProfile, updateUserProfile({ proficiencyLevel: newLevel }));
 }
 
-// --- Lifecycle Hooks ---
-onMounted(() => {
-  generateNewExercise();
-});
+// --- Function to handle focus area update from ProgressDisplay ---
+function handleFocusAreaUpdate(newFocusArea) {
+  console.log("Updating focus area to:", newFocusArea);
+  // Update the reactive object AND save to cookie
+  Object.assign(userProfile, updateUserProfile({ focusArea: newFocusArea }));
+
+  // Generate a new exercise with the updated focus area
+  if (newFocusArea) {
+    generateNewExercise();
+  }
+}
 </script>
 
 <style scoped>
