@@ -67,6 +67,18 @@ type UserProfile = {
   focusArea?: string; // Optional property for the selected grammar topic to focus on
 };
 
+// Question and Answer types
+type QuestionRequest = {
+  exercise: Exercise;
+  userAnswer: string;
+  feedback: GradingResult;
+  question: string;
+};
+
+type QuestionResponse = {
+  answer: string;
+};
+
 // Define the word list entry structure
 type WordListEntry = {
   german: string;
@@ -76,10 +88,12 @@ type WordListEntry = {
 };
 
 interface ApiRequestBody {
-  action: "generateExercise" | "gradeSentence";
+  action: "generateExercise" | "gradeSentence" | "answerQuestion";
   userProfile?: UserProfile;
   exercise?: Exercise; // Use inferred type
   userAnswer?: string;
+  feedback?: GradingResult;
+  question?: string;
 }
 
 // --- OpenAI Client Setup ---
@@ -318,6 +332,67 @@ Adhere strictly to the provided JSON schema.`;
     throw new Error(`Failed to grade sentence with LLM: ${error.message}`);
   }
 }
+
+async function handleAnswerQuestion(
+  exercise: Exercise,
+  userAnswer: string,
+  feedback: GradingResult,
+  question: string
+): Promise<QuestionResponse> {
+  console.log(`Answering question "${question}" for exercise:`, exercise);
+
+  const prompt: string = `You are a German language teacher assistant. A student has submitted a German sentence and received feedback. 
+  Now they have a follow-up question about the grammar or feedback.
+
+  Exercise topic: "${exercise.topic}"
+  Grammar focus: ${exercise.problemArea}
+  Student's sentence: "${userAnswer}"
+  
+  Feedback received:
+  - Correct: ${feedback.isCorrect ? "Yes" : "No"}
+  - Score: ${feedback.score}
+  - Feedback: "${feedback.feedback}"
+  - Review: "${feedback.review}"
+  
+  Student's question: "${question}"
+  
+  Please answer the student's question thoroughly but concisely. Focus specifically on what they're asking about.
+  If they're asking about grammar rules, explain the rule clearly with examples.
+  If they're asking about word choice, explain the difference between alternatives.
+  If they're asking about sentence structure, explain how it works in German.`;
+
+  try {
+    console.log("Sending question to LLM...");
+
+    const completion = await openai.chat.completions.create({
+      model: llmModel,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a helpful German language teaching assistant. Provide clear, accurate and educational responses to questions about German grammar, vocabulary, and language usage.",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3, // Lower temperature for more focused answers
+    });
+
+    const answer = completion.choices[0].message.content;
+
+    if (!answer) {
+      throw new Error("No answer received from LLM");
+    }
+
+    console.log("Received answer from LLM:", answer);
+    return { answer };
+  } catch (error: any) {
+    console.error("Error answering question:", error);
+    if (error instanceof OpenAI.APIError) {
+      throw new Error(`OpenAI API Error (${error.status}): ${error.message}`);
+    }
+    throw new Error(`Failed to answer question with LLM: ${error.message}`);
+  }
+}
 // --- End Helper Functions ---
 
 // --- API Route ---
@@ -325,10 +400,11 @@ app.post(
   "/api/llm",
   async (req: Request<{}, {}, ApiRequestBody>, res: Response) => {
     console.log("Received request on /api/llm:", req.body);
-    const { action, userProfile, exercise, userAnswer } = req.body;
+    const { action, userProfile, exercise, userAnswer, feedback, question } =
+      req.body;
 
     try {
-      let result: Exercise | GradingResult;
+      let result: Exercise | GradingResult | QuestionResponse;
       if (action === "generateExercise") {
         if (!userProfile)
           throw new Error("userProfile is required for generateExercise");
@@ -340,6 +416,17 @@ app.post(
           );
         // Type assertion needed here as userAnswer could be undefined based on ApiRequestBody
         result = await handleGradeSentence(exercise, userAnswer as string);
+      } else if (action === "answerQuestion") {
+        if (!exercise || userAnswer === undefined || !feedback || !question)
+          throw new Error(
+            "exercise, userAnswer, feedback, and question are required for answerQuestion"
+          );
+        result = await handleAnswerQuestion(
+          exercise,
+          userAnswer as string,
+          feedback,
+          question
+        );
       } else {
         // This case should ideally not happen if action type is enforced, but good for safety
         const exhaustiveCheck: never = action;

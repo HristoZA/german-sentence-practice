@@ -26,6 +26,16 @@
           {{ feedback.review }}
         </div>
       </div>
+
+      <!-- Add the QuestionMode component if we have an exercise and answer -->
+      <QuestionMode
+        v-if="exercise && userAnswer"
+        :exercise="exercise"
+        :user-answer="userAnswer"
+        :feedback="feedback"
+        :previous-questions="qaHistory"
+        @question-submitted="handleQuestionSubmitted"
+      />
     </div>
 
     <div v-else class="placeholder">Submit your answer to see feedback</div>
@@ -33,12 +43,70 @@
 </template>
 
 <script setup>
-defineProps({
+import { ref, defineProps } from "vue";
+import QuestionMode from "./QuestionMode.vue";
+import { askQuestionAboutFeedback } from "../utils/llm.js";
+
+const props = defineProps({
   feedback: {
     type: Object,
     required: true,
   },
+  exercise: {
+    type: Object,
+    default: null,
+  },
+  userAnswer: {
+    type: String,
+    default: "",
+  },
 });
+
+// Store question and answer history for this feedback session
+const qaHistory = ref([]);
+
+// Handle when a question is submitted via the QuestionMode component
+async function handleQuestionSubmitted(question) {
+  try {
+    // First add the question with a loading placeholder
+    const questionEntry = {
+      question,
+      answer: "Loading...",
+      timestamp: new Date(),
+    };
+    qaHistory.value.push(questionEntry);
+
+    // Store the index of the current question
+    const questionIndex = qaHistory.value.length - 1;
+
+    // Send the question to the backend
+    const response = await askQuestionAboutFeedback(
+      props.exercise,
+      props.userAnswer,
+      props.feedback,
+      question
+    );
+
+    // Update the answer once received - ensure Vue reactivity by updating the array properly
+    qaHistory.value[questionIndex] = {
+      ...qaHistory.value[questionIndex],
+      answer: response.answer,
+    };
+  } catch (error) {
+    console.error("Error handling question:", error);
+    // Update the placeholder with an error message - ensure Vue reactivity
+    const questionIndex = qaHistory.value.length - 1;
+    if (
+      questionIndex >= 0 &&
+      qaHistory.value[questionIndex].answer === "Loading..."
+    ) {
+      qaHistory.value[questionIndex] = {
+        ...qaHistory.value[questionIndex],
+        answer: "Failed to get an answer. Please try again.",
+      };
+    }
+  }
+}
 </script>
 
 <style scoped>

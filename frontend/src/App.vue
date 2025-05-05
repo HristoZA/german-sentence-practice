@@ -131,7 +131,12 @@
           <div v-if="isGrading" class="loading-indicator">
             Analyzing your answer...
           </div>
-          <FeedbackDisplay v-else :feedback="feedback" />
+          <FeedbackDisplay
+            v-else
+            :feedback="feedback"
+            :exercise="currentExercise"
+            :user-answer="userAnswer"
+          />
         </div>
       </div>
 

@@ -71,3 +71,41 @@ export async function gradeSentence(exercise, userAnswer) {
     throw error;
   }
 }
+
+/**
+ * Sends a question about grammar or feedback to the LLM backend.
+ * @param {object} exercise - The current exercise data.
+ * @param {string} userAnswer - The user's submitted sentence.
+ * @param {object} feedback - The feedback received for the sentence.
+ * @param {string} question - The user's question about the grammar or feedback.
+ * @returns {Promise<object>} The answer to the question.
+ */
+export async function askQuestionAboutFeedback(exercise, userAnswer, feedback, question) {
+  console.log(`Sending question "${question}" about exercise ${exercise.exerciseId} to backend`);
+
+  try {
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        action: 'answerQuestion', 
+        exercise, 
+        userAnswer,
+        feedback,
+        question
+      })
+    });
+    
+    if (!response.ok) {
+       const errorData = await response.json().catch(() => ({})); 
+      throw new Error(`Failed to answer question: ${response.statusText} ${errorData.error || ''}`);
+    }
+    
+    const data = await response.json();
+    console.log('Received answer from backend:', data);
+    return data;
+  } catch (error) {
+     console.error('Error in askQuestionAboutFeedback:', error);
+    throw error;
+  }
+}
