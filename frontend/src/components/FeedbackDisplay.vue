@@ -20,26 +20,11 @@
         {{ feedback.feedback }}
       </div>
 
-      <div v-if="feedback.suggestions" class="feedback-suggestions">
-        <h4>Suggestion</h4>
-        <p>{{ feedback.suggestions }}</p>
-      </div>
-
-      <div
-        v-if="feedback.grammarNotes && feedback.grammarNotes.length > 0"
-        class="feedback-grammar"
-      >
-        <h4>Grammar Notes:</h4>
-        <ul>
-          <li v-for="(note, index) in feedback.grammarNotes" :key="index">
-            <p>
-              <strong>{{ note.rule }}</strong>
-            </p>
-            <p v-if="note.example" class="example">
-              <em>Example: "{{ note.example }}"</em>
-            </p>
-          </li>
-        </ul>
+      <div v-if="feedback.review" class="feedback-review">
+        <h4>Review</h4>
+        <div class="review-content">
+          {{ feedback.review }}
+        </div>
       </div>
     </div>
 
@@ -95,44 +80,25 @@ defineProps({
 }
 
 .feedback-general,
-.feedback-suggestions,
-.feedback-grammar {
+.feedback-review {
   margin-bottom: 15px;
   font-size: 0.95em;
 }
 
-.feedback-suggestions {
-  background-color: #eff6ff; /* Light blue */
-  border: 1px solid #dbeafe;
+.feedback-review {
+  background-color: #f8fafc; /* Very light blue/gray */
+  border: 1px solid #e2e8f0;
   padding: 10px 15px;
   border-radius: 6px;
 }
 
-.feedback-grammar h4 {
+.feedback-review h4 {
   margin-bottom: 10px;
   font-weight: 500;
 }
 
-.feedback-grammar ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.feedback-grammar li {
-  background-color: #f3f4f6; /* Very light gray */
-  padding: 10px;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-}
-
-.feedback-grammar .example {
-  margin-top: 5px;
-  color: #6b7280; /* Medium gray */
-  font-size: 0.9em;
+.review-content {
+  white-space: pre-line; /* Preserves line breaks in the review text */
 }
 
 .placeholder {

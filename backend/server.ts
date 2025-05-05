@@ -49,14 +49,11 @@ const GradingResultSchema = z
       .describe("Whether the user's answer is considered correct"),
     score: z.number().describe("A score between 0.0 and 1.0"),
     feedback: z.string().describe("Concise overall feedback on the answer"),
-    suggestions: z
+    review: z
       .string()
-      .optional()
-      .describe("A helpful suggestion for improvement"),
-    grammarNotes: z
-      .array(GrammarNoteSchema)
-      .optional()
-      .describe("Specific grammar notes if incorrect"),
+      .describe(
+        "Comprehensive review of the sentence, explaining grammatical issues, suggesting improvements, and providing constructive feedback"
+      ),
   })
   .required()
   .describe("Schema for grading feedback on a German sentence");
@@ -248,14 +245,26 @@ async function handleGradeSentence(
   console.log(`Grading answer "${userAnswer}" for exercise:`, exercise);
   const prompt: string = `Grade the following German sentence written by a ${
     exercise.proficiencyLevel
-  } learner: "${userAnswer}". The exercise topic was "${
-    exercise.topic
-  }", focusing on ${
+  } learner: "${userAnswer}". 
+
+The exercise topic was "${exercise.topic}", focusing on ${
     exercise.problemArea
-  }, using keywords ${exercise.keyWords.join(
-    ", "
-  )}. Assess correctness (true/false), grammar, keyword usage, and relevance. Provide a score (0.0-1.0), concise feedback, a helpful suggestion, and specific grammar notes if incorrect. Adhere strictly to the provided JSON schema. 
-  Do not fail user if the sentence is correct grammatically and spelling wise, but does not fit topic. Only make a note in grammar notes.`;
+  }, using keywords ${exercise.keyWords.join(", ")}.
+
+First, assess whether the sentence is correct (true/false) based on grammar, spelling, and proper use of the German language. The sentence should be grammatically correct and make sense in German.
+
+Then, provide:
+1. A score between 0.0 and 1.0 reflecting the quality of the answer
+2. Brief feedback summarizing the overall assessment
+3. An in-depth review addressing the question: "What's wrong with this German sentence?" If nothing is wrong, explain what makes it a good sentence.
+
+In your review:
+- Explain any grammatical or spelling errors
+- Comment on word choice and sentence structure
+- Provide constructive suggestions for improvement
+- If relevant, explain the grammar rules being violated or applied correctly
+
+Adhere strictly to the provided JSON schema.`;
 
   try {
     console.log("Sending prompt to LLM for grading...");

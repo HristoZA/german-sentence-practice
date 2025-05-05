@@ -71,10 +71,10 @@
                 <p>
                   <strong>Feedback:</strong> {{ attempt.feedback.feedback }}
                 </p>
-                <div v-if="attempt.feedback.suggestions">
+                <div v-if="attempt.feedback.review">
                   <p>
-                    <strong>Suggestion:</strong>
-                    {{ attempt.feedback.suggestions }}
+                    <strong>Review:</strong>
+                    {{ attempt.feedback.review }}
                   </p>
                 </div>
               </div>
@@ -271,8 +271,7 @@ const feedback = reactive({
   isCorrect: null,
   score: null,
   feedback: "",
-  suggestions: "",
-  grammarNotes: [],
+  review: "",
 });
 const isLoadingExercise = ref(false);
 const isGrading = ref(false);
@@ -341,8 +340,7 @@ async function generateNewExercise() {
     isCorrect: null,
     score: null,
     feedback: "",
-    suggestions: "",
-    grammarNotes: [],
+    review: "",
   });
 
   isLoadingExercise.value = true;
@@ -380,8 +378,7 @@ function loadHistoricalExercise(exercise) {
     isCorrect: null,
     score: null,
     feedback: "",
-    suggestions: "",
-    grammarNotes: [],
+    review: "",
   });
 
   // Get the history record for this exercise
@@ -456,8 +453,7 @@ async function submitAnswer() {
       isCorrect: null,
       score: null,
       feedback: "",
-      suggestions: "",
-      grammarNotes: [],
+      review: "",
     });
   } finally {
     isGrading.value = false;
