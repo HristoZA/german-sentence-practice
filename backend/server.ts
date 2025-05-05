@@ -4,6 +4,9 @@ import cors from "cors";
 import OpenAI from "openai";
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
+import * as fs from "fs";
+import * as path from "path";
+import { parse } from "csv-parse/sync";
 
 dotenv.config();
 
@@ -67,6 +70,14 @@ type UserProfile = {
   focusArea?: string; // Optional property for the selected grammar topic to focus on
 };
 
+// Define the word list entry structure
+type WordListEntry = {
+  german: string;
+  english: string;
+  germanSentence: string;
+  clozeSentence: string;
+};
+
 interface ApiRequestBody {
   action: "generateExercise" | "gradeSentence";
   userProfile?: UserProfile;
@@ -89,6 +100,58 @@ app.use(cors());
 app.use(express.json());
 // --- End Middleware ---
 
+// --- Word List Functions ---
+let wordListCache: WordListEntry[] | null = null;
+
+function parseWordListCSV(filePath: string): WordListEntry[] {
+  try {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    // Skip the first line if it's a header
+    const parsedData = parse(fileContent, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+
+    return parsedData.map((row: any) => ({
+      german: row.German,
+      english: row.English,
+      germanSentence: row["German Sentence"],
+      clozeSentence: row["Cloze Sentence"],
+    }));
+  } catch (error) {
+    console.error("Error reading or parsing word list CSV:", error);
+    return [];
+  }
+}
+
+function getRandomWords(count: number = 10): WordListEntry[] {
+  if (!wordListCache) {
+    const filePath = path.join(__dirname, "data", "word_list.csv");
+    wordListCache = parseWordListCSV(filePath);
+    console.log(`Loaded ${wordListCache.length} words from CSV file.`);
+  }
+
+  if (wordListCache.length === 0) {
+    console.warn("Word list is empty, cannot select random words.");
+    return [];
+  }
+
+  // Shuffle the array and pick the first 'count' elements
+  const shuffled = [...wordListCache].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, Math.min(count, shuffled.length));
+}
+
+function formatRandomWordsForPrompt(words: WordListEntry[]): string {
+  if (words.length === 0) return "";
+
+  const formattedWords = words
+    .map((word) => `"${word.german}" (${word.english}): ${word.germanSentence}`)
+    .join("\n");
+
+  return `Here are some random German words you can use for inspiration:\n\n${formattedWords}\n\n`;
+}
+
 // --- Helper Functions ---
 async function handleGenerateExercise(
   userProfile: UserProfile
@@ -107,11 +170,18 @@ async function handleGenerateExercise(
     console.log(`Using problem areas: ${targetFocusArea}`);
   }
 
+  // Get 10 random words from our CSV file for inspiration
+  const randomWords = getRandomWords(10);
+  const randomWordsSection = formatRandomWordsForPrompt(randomWords);
+  console.log(`Selected ${randomWords.length} random words for inspiration`);
+
   const prompt: string = `Generate a German sentence exercise for a ${userProfile.proficiencyLevel} learner focusing specifically on "${targetFocusArea}". 
+  
+  ${randomWordsSection}
   
   Provide:
   - topic: something interesting and relevant to the grammar focus
-  - 1-2 diverse and less common keywords related to the topic (avoid overly frequent words like 'essen' or 'Frühstück' unless highly relevant)
+  - 1-2 diverse and less common keywords related to the topic (consider using one or two from the inspiration list above if they fit the grammar focus)
   - instructions: clear directions on how to form the sentence using the grammar point
   - context: brief scenario to help frame the sentence
   - problemArea: set this exactly to "${targetFocusArea}" as this is what the user wants to practice
@@ -184,7 +254,8 @@ async function handleGradeSentence(
     exercise.problemArea
   }, using keywords ${exercise.keyWords.join(
     ", "
-  )}. Assess correctness (true/false), grammar, keyword usage, and relevance. Provide a score (0.0-1.0), concise feedback, a helpful suggestion, and specific grammar notes if incorrect. Adhere strictly to the provided JSON schema.`; // Updated prompt slightly
+  )}. Assess correctness (true/false), grammar, keyword usage, and relevance. Provide a score (0.0-1.0), concise feedback, a helpful suggestion, and specific grammar notes if incorrect. Adhere strictly to the provided JSON schema. 
+  Do not fail user if the sentence is correct grammatically and spelling wise, but does not fit topic. Only make a note in grammar notes.`;
 
   try {
     console.log("Sending prompt to LLM for grading...");
