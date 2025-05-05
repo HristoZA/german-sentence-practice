@@ -24,6 +24,63 @@
           />
           <div v-else class="placeholder">No exercise loaded.</div>
         </div>
+
+        <!-- Exercise history context -->
+        <div
+          v-if="
+            currentExerciseRecord && currentExerciseRecord.attempts.length > 0
+          "
+          class="card-footer"
+        >
+          <div class="history-context">
+            <span
+              >Previous attempts:
+              {{ currentExerciseRecord.attempts.length }}</span
+            >
+            <button
+              class="text-button"
+              @click="showExerciseHistory = !showExerciseHistory"
+            >
+              {{ showExerciseHistory ? "Hide History" : "Show History" }}
+            </button>
+          </div>
+
+          <!-- History accordion -->
+          <div v-if="showExerciseHistory" class="history-accordion">
+            <div
+              v-for="(attempt, index) in currentExerciseRecord.attempts"
+              :key="index"
+              class="history-item"
+            >
+              <div class="history-header">
+                <span
+                  >Attempt #{{ index + 1 }} -
+                  {{ formatDate(attempt.timestamp) }}</span
+                >
+                <span
+                  :class="{
+                    correct: attempt.feedback.isCorrect,
+                    incorrect: !attempt.feedback.isCorrect,
+                  }"
+                >
+                  {{ attempt.feedback.isCorrect ? "✓ Correct" : "✗ Incorrect" }}
+                </span>
+              </div>
+              <div class="history-content">
+                <p><strong>Your answer:</strong> {{ attempt.userAnswer }}</p>
+                <p>
+                  <strong>Feedback:</strong> {{ attempt.feedback.feedback }}
+                </p>
+                <div v-if="attempt.feedback.suggestions">
+                  <p>
+                    <strong>Suggestion:</strong>
+                    {{ attempt.feedback.suggestions }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Answer Input Section -->
@@ -78,6 +135,89 @@
         </div>
       </div>
 
+      <!-- Exercise History Section -->
+      <div class="card">
+        <div class="card-header">
+          <h2>Exercise History</h2>
+          <div class="tab-controls">
+            <button
+              @click="activeHistoryTab = 'recent'"
+              :class="{ active: activeHistoryTab === 'recent' }"
+            >
+              Recent
+            </button>
+            <button
+              @click="activeHistoryTab = 'incomplete'"
+              :class="{ active: activeHistoryTab === 'incomplete' }"
+            >
+              Incomplete
+            </button>
+          </div>
+        </div>
+        <div class="card-content">
+          <div v-if="activeHistoryTab === 'recent'">
+            <div v-if="recentExercises.length === 0" class="placeholder">
+              No exercise history yet.
+            </div>
+            <div v-else class="exercise-history-list">
+              <div
+                v-for="record in recentExercises"
+                :key="record.exercise.exerciseId"
+                class="history-exercise-item"
+                @click="loadHistoricalExercise(record.exercise)"
+              >
+                <div class="history-exercise-header">
+                  <span>{{ record.exercise.topic }}</span>
+                  <span
+                    :class="{
+                      correct: record.isComplete,
+                      incomplete: !record.isComplete,
+                    }"
+                  >
+                    {{ record.isComplete ? "Completed" : "Incomplete" }}
+                  </span>
+                </div>
+                <div class="history-exercise-details">
+                  <span
+                    >{{ record.exercise.proficiencyLevel }} |
+                    {{ record.exercise.problemArea }}</span
+                  >
+                  <span>Attempts: {{ record.attempts.length }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="activeHistoryTab === 'incomplete'">
+            <div v-if="incompleteExercises.length === 0" class="placeholder">
+              No incomplete exercises!
+            </div>
+            <div v-else class="exercise-history-list">
+              <div
+                v-for="record in incompleteExercises"
+                :key="record.exercise.exerciseId"
+                class="history-exercise-item"
+                @click="loadHistoricalExercise(record.exercise)"
+              >
+                <div class="history-exercise-header">
+                  <span>{{ record.exercise.topic }}</span>
+                  <span class="attempts">
+                    {{ record.attempts.length }} attempt(s)
+                  </span>
+                </div>
+                <div class="history-exercise-details">
+                  <span
+                    >{{ record.exercise.proficiencyLevel }} |
+                    {{ record.exercise.problemArea }}</span
+                  >
+                  <span>{{ formatDate(record.lastAttemptDate) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Progress Section -->
       <div class="card">
         <div class="card-header">
@@ -96,7 +236,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from "vue";
+import { ref, reactive, onMounted, computed, watch } from "vue";
 import ExerciseDisplay from "./components/ExerciseDisplay.vue";
 import FeedbackDisplay from "./components/FeedbackDisplay.vue";
 import ProgressDisplay from "./components/ProgressDisplay.vue";
@@ -106,6 +246,14 @@ import {
   saveUserProfile,
   updateUserProfile,
 } from "./utils/userProfile.js";
+import {
+  loadExerciseHistory,
+  addExerciseToHistory,
+  recordExerciseAttempt,
+  getExerciseAttempts,
+  getRecentExercises,
+  getIncompleteExercises,
+} from "./utils/exerciseHistory.js";
 
 // --- State Variables ---
 const userProfile = reactive(loadUserProfile());
@@ -131,6 +279,13 @@ const isGrading = ref(false);
 const error = ref(null);
 const inputError = ref(null);
 
+// --- Exercise History State ---
+const recentExercises = ref([]);
+const incompleteExercises = ref([]);
+const currentExerciseRecord = ref(null);
+const activeHistoryTab = ref("recent");
+const showExerciseHistory = ref(false);
+
 // --- Computed property for input validation ---
 const isInputValid = computed(() => {
   const answer = userAnswer.value.trim();
@@ -139,7 +294,47 @@ const isInputValid = computed(() => {
   return answer.split(" ").length >= 2 || answer.length >= 5;
 });
 
+// --- Watch for exercise changes to update history record ---
+watch(
+  () => currentExercise.exerciseId,
+  (newId) => {
+    if (newId) {
+      const history = loadExerciseHistory();
+      currentExerciseRecord.value = history[newId] || null;
+    } else {
+      currentExerciseRecord.value = null;
+    }
+  },
+  { immediate: true }
+);
+
+// --- Load history data on mount ---
+onMounted(() => {
+  loadExerciseHistoryData();
+  // Generate a new exercise if we don't have one
+  if (!currentExercise.exerciseId) {
+    generateNewExercise();
+  }
+});
+
 // --- Functions ---
+function loadExerciseHistoryData() {
+  recentExercises.value = getRecentExercises();
+  incompleteExercises.value = getIncompleteExercises();
+}
+
+function formatDate(date) {
+  // Format date as "MMM D, YYYY h:mm a" (e.g., "May 5, 2025 3:30 PM")
+  if (!date) return "";
+  return new Date(date).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 async function generateNewExercise() {
   // --- Reset feedback state ---
   Object.assign(feedback, {
@@ -154,10 +349,18 @@ async function generateNewExercise() {
   error.value = null;
   inputError.value = null;
   userAnswer.value = "";
+  showExerciseHistory.value = false;
 
   try {
     const newExercise = await fetchExercise(userProfile);
     Object.assign(currentExercise, newExercise);
+
+    // Add to exercise history
+    const record = addExerciseToHistory(newExercise);
+    currentExerciseRecord.value = record;
+
+    // Update history lists
+    loadExerciseHistoryData();
   } catch (err) {
     console.error("Error fetching exercise:", err);
     error.value =
@@ -165,6 +368,28 @@ async function generateNewExercise() {
   } finally {
     isLoadingExercise.value = false;
   }
+}
+
+function loadHistoricalExercise(exercise) {
+  // Load an exercise from history
+  Object.assign(currentExercise, exercise);
+
+  // Reset input state
+  userAnswer.value = "";
+  Object.assign(feedback, {
+    isCorrect: null,
+    score: null,
+    feedback: "",
+    suggestions: "",
+    grammarNotes: [],
+  });
+
+  // Get the history record for this exercise
+  const history = loadExerciseHistory();
+  currentExerciseRecord.value = history[exercise.exerciseId] || null;
+
+  // Show the history by default when loading a historical exercise
+  showExerciseHistory.value = true;
 }
 
 async function submitAnswer() {
@@ -188,25 +413,41 @@ async function submitAnswer() {
     const gradingResult = await gradeSentence(currentExercise, answer);
     Object.assign(feedback, gradingResult);
 
+    // Record the attempt in history
+    recordExerciseAttempt(currentExercise.exerciseId, answer, gradingResult);
+
+    // Reload the current exercise record
+    const history = loadExerciseHistory();
+    currentExerciseRecord.value = history[currentExercise.exerciseId] || null;
+
+    // Update history lists
+    loadExerciseHistoryData();
+
     // --- Update User Profile based on performance ---
-    const profileUpdates = {
-      exercisesCompleted: userProfile.exercisesCompleted + 1,
-      correctAnswers:
-        userProfile.correctAnswers + (gradingResult.isCorrect ? 1 : 0),
-      problemAreas: [...userProfile.problemAreas],
-    };
+    // Only count this as a new exercise if it's the first attempt
+    const attemptsCount = currentExerciseRecord.value?.attempts.length || 0;
+    const isFirstAttempt = attemptsCount === 1;
 
-    // Add problem area if answer is incorrect and it's not already listed
-    if (
-      !gradingResult.isCorrect &&
-      currentExercise.problemArea &&
-      !userProfile.problemAreas.includes(currentExercise.problemArea)
-    ) {
-      profileUpdates.problemAreas.push(currentExercise.problemArea);
+    if (isFirstAttempt) {
+      const profileUpdates = {
+        exercisesCompleted: userProfile.exercisesCompleted + 1,
+        correctAnswers:
+          userProfile.correctAnswers + (gradingResult.isCorrect ? 1 : 0),
+        problemAreas: [...userProfile.problemAreas],
+      };
+
+      // Add problem area if answer is incorrect and it's not already listed
+      if (
+        !gradingResult.isCorrect &&
+        currentExercise.problemArea &&
+        !userProfile.problemAreas.includes(currentExercise.problemArea)
+      ) {
+        profileUpdates.problemAreas.push(currentExercise.problemArea);
+      }
+
+      // Update the reactive object AND save to cookie
+      Object.assign(userProfile, updateUserProfile(profileUpdates));
     }
-
-    // Update the reactive object AND save to cookie
-    Object.assign(userProfile, updateUserProfile(profileUpdates));
   } catch (err) {
     console.error("Error grading sentence:", err);
     error.value =
@@ -257,5 +498,110 @@ function handleFocusAreaUpdate(newFocusArea) {
   color: #dc2626; /* Red */
   font-size: 0.9em;
   margin-top: 5px;
+}
+
+/* Exercise History styling */
+.tab-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-controls button {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.tab-controls button.active {
+  font-weight: bold;
+  border-bottom: 2px solid #4f46e5;
+}
+
+.exercise-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-exercise-item {
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.history-exercise-item:hover {
+  background-color: #f9fafb;
+}
+
+.history-exercise-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.history-exercise-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9em;
+  color: #6b7280;
+}
+
+.correct {
+  color: #16a34a; /* Green */
+}
+
+.incorrect,
+.incomplete {
+  color: #dc2626; /* Red */
+}
+
+.attempts {
+  color: #6b7280; /* Gray */
+}
+
+/* Attempt history styling */
+.card-footer {
+  padding: 8px 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.history-context {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.text-button {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.history-accordion {
+  margin-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.history-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 500;
+}
+
+.history-content {
+  margin-top: 4px;
+  padding: 4px 0;
+  font-size: 0.9em;
 }
 </style>
