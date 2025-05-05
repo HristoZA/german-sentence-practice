@@ -14,6 +14,7 @@ const HISTORY_KEY = 'germanAppExerciseHistory';
  * @property {string} userAnswer - The user's submitted answer
  * @property {Object} feedback - The feedback received for this attempt
  * @property {Date} timestamp - When the attempt was made
+ * @property {Array<{question: string, answer: string, timestamp: Date}>} [qaHistory] - Optional Q&A history for this attempt
  */
 
 /**
@@ -87,35 +88,73 @@ export function addExerciseToHistory(exercise) {
 }
 
 /**
- * Record a new attempt for an exercise
+ * Record a new attempt for an exercise (initially without Q&A)
  * @param {string} exerciseId - The ID of the exercise
  * @param {string} userAnswer - The submitted answer
  * @param {Object} feedback - The feedback received
- * @returns {ExerciseAttempt} The recorded attempt
+ * @returns {ExerciseAttempt} The recorded attempt object, including timestamp
  */
 export function recordExerciseAttempt(exerciseId, userAnswer, feedback) {
   const history = loadExerciseHistory();
-  
+
   if (!history[exerciseId]) {
-    throw new Error(`Exercise with ID ${exerciseId} not found in history`);
+    // If exercise doesn't exist, create it first (optional, depends on desired flow)
+    // For now, assume addExerciseToHistory was called previously
+     throw new Error(`Exercise with ID ${exerciseId} not found in history. Cannot record attempt.`);
   }
-  
+
+  const timestamp = new Date(); // Capture timestamp accurately
   const attempt = {
     exerciseId,
     userAnswer,
     feedback,
-    timestamp: new Date()
+    timestamp: timestamp,
+    qaHistory: [] // Initialize as empty
   };
-  
+
   history[exerciseId].attempts.push(attempt);
-  
+
   // Mark exercise as complete if the answer is correct
   if (feedback.isCorrect) {
     history[exerciseId].isComplete = true;
   }
-  
+
   saveExerciseHistory(history);
-  return attempt;
+  return attempt; // Return the full attempt object
+}
+
+/**
+ * Update the Q&A history for a specific attempt identified by its timestamp
+ * @param {string} exerciseId - The ID of the exercise
+ * @param {Date | string} attemptTimestamp - The timestamp of the attempt to update
+ * @param {Array<{question: string, answer: string, timestamp: Date}>} qaHistory - The new Q&A history
+ */
+export function updateAttemptQaHistory(exerciseId, attemptTimestamp, qaHistory) {
+  const history = loadExerciseHistory();
+  if (!history[exerciseId]) {
+    console.warn(`Exercise with ID ${exerciseId} not found for updating Q&A.`);
+    return;
+  }
+
+  const record = history[exerciseId];
+  const targetTime = new Date(attemptTimestamp).getTime(); // Ensure comparison is robust
+
+  // Find the attempt by timestamp
+  const attemptIndex = record.attempts.findIndex(
+    att => att.timestamp.getTime() === targetTime
+  );
+
+  if (attemptIndex === -1) {
+    console.warn(`Attempt with timestamp ${attemptTimestamp} (time: ${targetTime}) not found for exercise ${exerciseId}. Q&A not saved.`);
+    // Log existing timestamps for debugging if needed
+    // console.log("Available attempt timestamps:", record.attempts.map(a => a.timestamp.getTime()));
+    return;
+  }
+
+  // Update the qaHistory of the found attempt
+  record.attempts[attemptIndex].qaHistory = qaHistory;
+  saveExerciseHistory(history);
+  console.log(`Updated Q&A for attempt at ${attemptTimestamp}`); // Log success
 }
 
 /**

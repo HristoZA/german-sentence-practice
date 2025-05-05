@@ -77,6 +77,28 @@
                     {{ attempt.feedback.review }}
                   </p>
                 </div>
+
+                <!-- Display Q&A History for this attempt -->
+                <div
+                  v-if="attempt.qaHistory && attempt.qaHistory.length > 0"
+                  class="qa-history-section"
+                >
+                  <h4>Questions about this attempt:</h4>
+                  <ul class="qa-list">
+                    <li
+                      v-for="(qa, qaIndex) in attempt.qaHistory"
+                      :key="qaIndex"
+                      class="qa-item"
+                    >
+                      <p class="qa-question">
+                        <strong>Q:</strong> {{ qa.question }}
+                      </p>
+                      <p class="qa-answer">
+                        <strong>A:</strong> {{ qa.answer }}
+                      </p>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
@@ -136,6 +158,8 @@
             :feedback="feedback"
             :exercise="currentExercise"
             :user-answer="userAnswer"
+            :qa-history="currentAttemptQaHistory"
+            @update:qa-history="handleQaHistoryUpdate"
           />
         </div>
       </div>
@@ -255,6 +279,7 @@ import {
   loadExerciseHistory,
   addExerciseToHistory,
   recordExerciseAttempt,
+  updateAttemptQaHistory, // Import the new function
   getExerciseAttempts,
   getRecentExercises,
   getIncompleteExercises,
@@ -282,6 +307,8 @@ const isLoadingExercise = ref(false);
 const isGrading = ref(false);
 const error = ref(null);
 const inputError = ref(null);
+const currentAttemptQaHistory = ref([]); // Q&A history for current attempt
+const currentAttemptTimestamp = ref(null); // Timestamp of the current attempt
 
 // --- Exercise History State ---
 const recentExercises = ref([]);
@@ -308,6 +335,9 @@ watch(
     } else {
       currentExerciseRecord.value = null;
     }
+    // Reset Q&A history when exercise changes
+    currentAttemptQaHistory.value = [];
+    currentAttemptTimestamp.value = null;
   },
   { immediate: true }
 );
@@ -347,6 +377,8 @@ async function generateNewExercise() {
     feedback: "",
     review: "",
   });
+  currentAttemptQaHistory.value = []; // Reset Q&A history
+  currentAttemptTimestamp.value = null; // Reset timestamp
 
   isLoadingExercise.value = true;
   error.value = null;
@@ -385,6 +417,8 @@ function loadHistoricalExercise(exercise) {
     feedback: "",
     review: "",
   });
+  currentAttemptQaHistory.value = []; // Reset Q&A history
+  currentAttemptTimestamp.value = null; // Reset timestamp
 
   // Get the history record for this exercise
   const history = loadExerciseHistory();
@@ -411,12 +445,29 @@ async function submitAnswer() {
   isGrading.value = true;
   error.value = null;
   feedback.isCorrect = null;
+  // Reset Q&A history for new attempt
+  currentAttemptQaHistory.value = [];
+  currentAttemptTimestamp.value = null; // Clear timestamp before making a new attempt
+
   try {
     const gradingResult = await gradeSentence(currentExercise, answer);
-    Object.assign(feedback, gradingResult);
 
-    // Record the attempt in history
-    recordExerciseAttempt(currentExercise.exerciseId, answer, gradingResult);
+    // Record the attempt in history without Q&A initially
+    const recordedAttempt = recordExerciseAttempt(
+      currentExercise.exerciseId,
+      answer,
+      gradingResult
+    );
+
+    // Store the timestamp of the attempt we just recorded
+    currentAttemptTimestamp.value = recordedAttempt.timestamp;
+    console.log(
+      "Recorded attempt with timestamp:",
+      currentAttemptTimestamp.value
+    );
+
+    // Update the feedback state
+    Object.assign(feedback, gradingResult);
 
     // Reload the current exercise record
     const history = loadExerciseHistory();
@@ -454,14 +505,37 @@ async function submitAnswer() {
     console.error("Error grading sentence:", err);
     error.value =
       err.message || "Failed to grade the sentence. Please try again.";
+    // Reset feedback fully on error
     Object.assign(feedback, {
       isCorrect: null,
       score: null,
       feedback: "",
       review: "",
     });
+    currentAttemptTimestamp.value = null; // Reset timestamp on error
   } finally {
     isGrading.value = false;
+  }
+}
+
+// Function to handle updates from FeedbackDisplay
+function handleQaHistoryUpdate(newHistory) {
+  currentAttemptQaHistory.value = newHistory;
+
+  // If we have a timestamp for the current attempt, update its Q&A history
+  if (currentAttemptTimestamp.value && currentExercise.exerciseId) {
+    console.log("Updating Q&A for attempt at:", currentAttemptTimestamp.value);
+    updateAttemptQaHistory(
+      currentExercise.exerciseId,
+      currentAttemptTimestamp.value,
+      newHistory
+    );
+
+    // Reload the current exercise record to reflect the Q&A updates immediately
+    const history = loadExerciseHistory();
+    currentExerciseRecord.value = history[currentExercise.exerciseId] || null;
+  } else {
+    console.warn("Cannot update Q&A history: Missing exerciseId or timestamp");
   }
 }
 
@@ -604,5 +678,41 @@ function handleFocusAreaUpdate(newFocusArea) {
   margin-top: 4px;
   padding: 4px 0;
   font-size: 0.9em;
+}
+
+/* Styles for Q&A History within attempts */
+.qa-history-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e5e7eb; /* Separator */
+}
+
+.qa-history-section h4 {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: #4b5563; /* Gray-600 */
+  margin-bottom: 5px;
+}
+
+.qa-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.qa-item {
+  margin-bottom: 8px;
+  font-size: 0.85em;
+}
+
+.qa-question {
+  margin-bottom: 2px;
+  color: #374151; /* Gray-700 */
+}
+
+.qa-answer {
+  margin-bottom: 0;
+  color: #1f2937; /* Gray-800 */
+  white-space: pre-wrap; /* Preserve line breaks in answers */
 }
 </style>

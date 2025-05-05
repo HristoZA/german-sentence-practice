@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps } from "vue";
+import { ref, defineProps, defineEmits } from "vue"; // Import defineEmits
 import QuestionMode from "./QuestionMode.vue";
 import { askQuestionAboutFeedback } from "../utils/llm.js";
 
@@ -60,24 +60,36 @@ const props = defineProps({
     type: String,
     default: "",
   },
+  // Accept qaHistory as a prop
+  qaHistory: {
+    type: Array,
+    required: true,
+  },
 });
 
-// Store question and answer history for this feedback session
-const qaHistory = ref([]);
+// Define the emits
+const emit = defineEmits(["update:qaHistory"]);
+
+// Remove internal qaHistory ref
+// const qaHistory = ref([]);
 
 // Handle when a question is submitted via the QuestionMode component
 async function handleQuestionSubmitted(question) {
   try {
+    // Create a temporary history to emit
+    const currentHistory = [...props.qaHistory];
+
     // First add the question with a loading placeholder
     const questionEntry = {
       question,
       answer: "Loading...",
       timestamp: new Date(),
     };
-    qaHistory.value.push(questionEntry);
+    currentHistory.push(questionEntry);
+    emit("update:qaHistory", currentHistory); // Emit update
 
     // Store the index of the current question
-    const questionIndex = qaHistory.value.length - 1;
+    const questionIndex = currentHistory.length - 1;
 
     // Send the question to the backend
     const response = await askQuestionAboutFeedback(
@@ -87,23 +99,28 @@ async function handleQuestionSubmitted(question) {
       question
     );
 
-    // Update the answer once received - ensure Vue reactivity by updating the array properly
-    qaHistory.value[questionIndex] = {
-      ...qaHistory.value[questionIndex],
+    // Update the answer once received - create a new array for reactivity
+    const updatedHistory = [...currentHistory];
+    updatedHistory[questionIndex] = {
+      ...updatedHistory[questionIndex],
       answer: response.answer,
     };
+    emit("update:qaHistory", updatedHistory); // Emit final update
   } catch (error) {
     console.error("Error handling question:", error);
-    // Update the placeholder with an error message - ensure Vue reactivity
-    const questionIndex = qaHistory.value.length - 1;
+    // Update the placeholder with an error message - create a new array for reactivity
+    const currentHistory = [...props.qaHistory];
+    const questionIndex = currentHistory.length - 1;
     if (
       questionIndex >= 0 &&
-      qaHistory.value[questionIndex].answer === "Loading..."
+      currentHistory[questionIndex].answer === "Loading..."
     ) {
-      qaHistory.value[questionIndex] = {
-        ...qaHistory.value[questionIndex],
+      const updatedHistory = [...currentHistory];
+      updatedHistory[questionIndex] = {
+        ...updatedHistory[questionIndex],
         answer: "Failed to get an answer. Please try again.",
       };
+      emit("update:qaHistory", updatedHistory); // Emit error update
     }
   }
 }
