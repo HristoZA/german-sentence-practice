@@ -265,9 +265,15 @@ The exercise topic was "${exercise.topic}", focusing on ${
     exercise.problemArea
   }, using keywords ${exercise.keyWords.join(", ")}.
 
-IMPORTANT: Be more lenient in your grading. If the sentence has proper grammar and vocabulary, and makes logical sense in German, consider it correct EVEN IF it doesn't perfectly match the intended category, problem area, or doesn't use all the suggested keywords. Focus primarily on whether the sentence is grammatically correct and natural in German.
+IMPORTANT GRADING GUIDELINES:
+1. Be lenient on whether the sentence matches the intended category, problem area, or uses all the suggested keywords.
+2. However, be strict on fundamental grammar rules, particularly:
+   - Article gender agreement (der, die, das) must match the noun gender
+   - Adjective endings must agree with the noun's gender, number, and case
+   - Subject-verb agreement must be correct
+   - Case usage (nominative, accusative, dative, genitive) must be appropriate
 
-First, assess whether the sentence is correct (true/false) based on grammar, spelling, and proper use of the German language. The sentence should be grammatically correct and make sense in German.
+First, assess whether the sentence is correct (true/false) based on grammar, spelling, and proper use of the German language. The sentence should be grammatically correct and make sense in German. A sentence with incorrect article gender (e.g., "eine Kleid" instead of "ein Kleid") should be marked as incorrect.
 
 Then, provide:
 1. A score between 0.0 and 1.0 reflecting the quality of the answer
@@ -277,6 +283,7 @@ Then, provide:
 In your review:
 - Explain any grammatical or spelling errors
 - Comment on word choice and sentence structure
+- Pay special attention to article-noun gender agreement
 - Provide constructive suggestions for improvement
 - If relevant, explain the grammar rules being violated or applied correctly
 
@@ -291,7 +298,7 @@ Adhere strictly to the provided JSON schema.`;
         {
           role: "system",
           content:
-            "You are an assistant grading German language sentences. Respond in English. Be lenient in your grading - if a sentence has proper grammar and makes sense, consider it correct even if it doesn't perfectly align with the exercise focus.",
+            "You are an assistant grading German language sentences. Respond in English. Be strict about grammatical correctness, especially regarding article-noun gender agreement, while being lenient about adhering to the exercise's specific topic focus.",
         },
         { role: "user", content: prompt },
       ],
