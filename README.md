@@ -2,6 +2,8 @@
 
 A modern web application for practicing German sentence construction with AI-powered feedback and personalized exercises.
 
+![German Sentence Practice](img.png)
+
 ## Overview
 
 German Sentence Practice is an interactive language learning tool designed to help users improve their German sentence construction skills. The application uses AI to generate personalized exercises, provide immediate feedback on user-created sentences, and track progress over time.
