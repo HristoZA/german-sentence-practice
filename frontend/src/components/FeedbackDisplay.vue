@@ -16,14 +16,22 @@
         </span>
       </div>
 
+      <!-- Render feedback with markdown -->
       <div v-if="feedback.feedback" class="feedback-general">
-        {{ feedback.feedback }}
+        <div
+          v-html="renderMarkdown(feedback.feedback)"
+          class="markdown-content"
+        ></div>
       </div>
 
+      <!-- Render review with markdown -->
       <div v-if="feedback.review" class="feedback-review">
         <h4>Review</h4>
         <div class="review-content">
-          {{ feedback.review }}
+          <div
+            v-html="renderMarkdown(feedback.review)"
+            class="markdown-content"
+          ></div>
         </div>
       </div>
 
@@ -43,9 +51,10 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from "vue"; // Import defineEmits
+import { ref, defineProps, defineEmits } from "vue";
 import QuestionMode from "./QuestionMode.vue";
 import { askQuestionAboutFeedback } from "../utils/llm.js";
+import { marked } from "marked"; // Import the marked library
 
 const props = defineProps({
   feedback: {
@@ -60,7 +69,6 @@ const props = defineProps({
     type: String,
     default: "",
   },
-  // Accept qaHistory as a prop
   qaHistory: {
     type: Array,
     required: true,
@@ -70,8 +78,22 @@ const props = defineProps({
 // Define the emits
 const emit = defineEmits(["update:qaHistory"]);
 
-// Remove internal qaHistory ref
-// const qaHistory = ref([]);
+// Function to safely render Markdown
+function renderMarkdown(text) {
+  if (!text) return "";
+  try {
+    // Set options for security and rendering
+    marked.setOptions({
+      breaks: true, // Convert \n to <br>
+      gfm: true, // GitHub Flavored Markdown
+      sanitize: false, // We will sanitize manually if needed
+    });
+    return marked.parse(text);
+  } catch (error) {
+    console.error("Error rendering Markdown:", error);
+    return text; // Return original text if there's an error
+  }
+}
 
 // Handle when a question is submitted via the QuestionMode component
 async function handleQuestionSubmitted(question) {
@@ -192,5 +214,72 @@ async function handleQuestionSubmitted(question) {
   padding: 20px;
   background-color: #f9fafb;
   border-radius: 6px;
+}
+
+/* Markdown content styling */
+:deep(.markdown-content) {
+  /* Deep selector to target elements inside v-html */
+  line-height: 1.6;
+}
+
+:deep(.markdown-content h1),
+:deep(.markdown-content h2),
+:deep(.markdown-content h3),
+:deep(.markdown-content h4),
+:deep(.markdown-content h5),
+:deep(.markdown-content h6) {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+:deep(.markdown-content p) {
+  margin-bottom: 0.75em;
+}
+
+:deep(.markdown-content ul),
+:deep(.markdown-content ol) {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+:deep(.markdown-content li) {
+  margin-bottom: 0.25em;
+}
+
+:deep(.markdown-content code) {
+  background-color: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+:deep(.markdown-content pre) {
+  background-color: #f3f4f6;
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+:deep(.markdown-content blockquote) {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1em;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+}
+
+:deep(.markdown-content table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1em;
+}
+
+:deep(.markdown-content th),
+:deep(.markdown-content td) {
+  border: 1px solid #e5e7eb;
+  padding: 0.5em;
+  text-align: left;
 }
 </style>

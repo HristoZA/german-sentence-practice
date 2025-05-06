@@ -68,14 +68,16 @@
               </div>
               <div class="history-content">
                 <p><strong>Your answer:</strong> {{ attempt.userAnswer }}</p>
-                <p>
-                  <strong>Feedback:</strong> {{ attempt.feedback.feedback }}
-                </p>
-                <div v-if="attempt.feedback.review">
-                  <p>
-                    <strong>Review:</strong>
-                    {{ attempt.feedback.review }}
-                  </p>
+                <div class="markdown-history-content">
+                  <p><strong>Feedback:</strong></p>
+                  <div v-html="renderMarkdown(attempt.feedback.feedback)"></div>
+                </div>
+                <div
+                  v-if="attempt.feedback.review"
+                  class="markdown-history-content"
+                >
+                  <p><strong>Review:</strong></p>
+                  <div v-html="renderMarkdown(attempt.feedback.review)"></div>
                 </div>
 
                 <!-- Display Q&A History for this attempt -->
@@ -91,10 +93,12 @@
                       class="qa-item"
                     >
                       <p class="qa-question">
-                        <strong>Q:</strong> {{ qa.question }}
+                        <strong>Q:</strong>
+                        <span v-html="renderMarkdown(qa.question)"></span>
                       </p>
                       <p class="qa-answer">
-                        <strong>A:</strong> {{ qa.answer }}
+                        <strong>A:</strong>
+                        <span v-html="renderMarkdown(qa.answer)"></span>
                       </p>
                     </li>
                   </ul>
@@ -284,6 +288,7 @@ import {
   getRecentExercises,
   getIncompleteExercises,
 } from "./utils/exerciseHistory.js";
+import { marked } from "marked"; // Import the marked library
 
 // --- State Variables ---
 const userProfile = reactive(loadUserProfile());
@@ -557,6 +562,23 @@ function handleFocusAreaUpdate(newFocusArea) {
     generateNewExercise();
   }
 }
+
+// Function to safely render Markdown
+function renderMarkdown(text) {
+  if (!text) return "";
+  try {
+    // Set options for security and rendering
+    marked.setOptions({
+      breaks: true, // Convert \n to <br>
+      gfm: true, // GitHub Flavored Markdown
+      sanitize: false, // We will handle sanitization separately if needed
+    });
+    return marked.parse(text);
+  } catch (error) {
+    console.error("Error rendering Markdown:", error);
+    return text; // Return original text if there's an error
+  }
+}
 </script>
 
 <style scoped>
@@ -714,5 +736,69 @@ function handleFocusAreaUpdate(newFocusArea) {
   margin-bottom: 0;
   color: #1f2937; /* Gray-800 */
   white-space: pre-wrap; /* Preserve line breaks in answers */
+}
+
+/* Markdown history content styling */
+.markdown-history-content {
+  margin-bottom: 10px;
+}
+
+.markdown-history-content > p {
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+
+:deep(.history-content .markdown-content) {
+  line-height: 1.5;
+  padding-left: 10px; /* Indent markdown content */
+}
+
+:deep(.history-content .markdown-content h1),
+:deep(.history-content .markdown-content h2),
+:deep(.history-content .markdown-content h3),
+:deep(.history-content .markdown-content h4),
+:deep(.history-content .markdown-content h5),
+:deep(.history-content .markdown-content h6) {
+  margin-top: 0.75em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  font-size: 0.95em;
+}
+
+:deep(.history-content .markdown-content p) {
+  margin-bottom: 0.5em;
+}
+
+:deep(.history-content .markdown-content ul),
+:deep(.history-content .markdown-content ol) {
+  padding-left: 1.5em;
+  margin-bottom: 0.5em;
+  margin-top: 0.25em;
+}
+
+:deep(.history-content .markdown-content li) {
+  margin-bottom: 0.25em;
+}
+
+:deep(.history-content .markdown-content code) {
+  background-color: #f3f4f6;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+:deep(.history-content .markdown-content pre) {
+  background-color: #f3f4f6;
+  padding: 0.75em;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-bottom: 0.75em;
+  font-size: 0.9em;
+}
+
+:deep(.qa-question span .markdown-content),
+:deep(.qa-answer span .markdown-content) {
+  display: inline;
 }
 </style>
