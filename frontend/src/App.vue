@@ -115,35 +115,57 @@
           <div v-if="error" class="error-message">
             {{ error }}
           </div>
-          <label for="answer">Your answer:</label>
-          <textarea
-            id="answer"
-            v-model="userAnswer"
-            rows="3"
-            placeholder="Type your German sentence here..."
-            :disabled="isLoadingExercise || isGrading"
-            :class="{ 'input-error': inputError }"
-            @input="inputError = null"
-          ></textarea>
-          <p v-if="inputError" class="input-error-text">{{ inputError }}</p>
 
-          <div class="button-group">
-            <button
-              @click="submitAnswer"
-              class="primary"
-              :disabled="isLoadingExercise || isGrading || !userAnswer.trim()"
-            >
-              <span v-if="isGrading">Grading...</span>
-              <span v-else>Submit Answer</span>
-            </button>
-            <button
-              @click="generateNewExercise"
-              class="secondary"
+          <!-- Voice Input Component -->
+          <div v-if="showVoiceInput">
+            <VoiceInput
+              @transcription-complete="handleVoiceTranscription"
+              @cancel="showVoiceInput = false"
+            />
+          </div>
+
+          <!-- Text Input Area -->
+          <div v-else>
+            <div class="input-header">
+              <label for="answer">Your answer:</label>
+              <button
+                class="voice-button"
+                @click="showVoiceInput = true"
+                title="Record voice input"
+                :disabled="isLoadingExercise || isGrading"
+              >
+                <span class="microphone-icon">🎤</span>
+              </button>
+            </div>
+            <textarea
+              id="answer"
+              v-model="userAnswer"
+              rows="3"
+              placeholder="Type your German sentence here..."
               :disabled="isLoadingExercise || isGrading"
-            >
-              <span v-if="isLoadingExercise">Loading...</span>
-              <span v-else>New Exercise</span>
-            </button>
+              :class="{ 'input-error': inputError }"
+              @input="inputError = null"
+            ></textarea>
+            <p v-if="inputError" class="input-error-text">{{ inputError }}</p>
+
+            <div class="button-group">
+              <button
+                @click="submitAnswer"
+                class="primary"
+                :disabled="isLoadingExercise || isGrading || !userAnswer.trim()"
+              >
+                <span v-if="isGrading">Grading...</span>
+                <span v-else>Submit Answer</span>
+              </button>
+              <button
+                @click="generateNewExercise"
+                class="secondary"
+                :disabled="isLoadingExercise || isGrading"
+              >
+                <span v-if="isLoadingExercise">Loading...</span>
+                <span v-else>New Exercise</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -273,6 +295,7 @@ import { ref, reactive, onMounted, computed, watch } from "vue";
 import ExerciseDisplay from "./components/ExerciseDisplay.vue";
 import FeedbackDisplay from "./components/FeedbackDisplay.vue";
 import ProgressDisplay from "./components/ProgressDisplay.vue";
+import VoiceInput from "./components/VoiceInput.vue"; // Import the VoiceInput component
 import { fetchExercise, gradeSentence } from "./utils/llm.js";
 import {
   loadUserProfile,
@@ -314,6 +337,7 @@ const error = ref(null);
 const inputError = ref(null);
 const currentAttemptQaHistory = ref([]); // Q&A history for current attempt
 const currentAttemptTimestamp = ref(null); // Timestamp of the current attempt
+const showVoiceInput = ref(false); // State to show/hide voice input
 
 // --- Exercise History State ---
 const recentExercises = ref([]);
@@ -579,6 +603,12 @@ function renderMarkdown(text) {
     return text; // Return original text if there's an error
   }
 }
+
+// Function to handle voice transcription
+function handleVoiceTranscription(transcription) {
+  userAnswer.value = transcription;
+  showVoiceInput.value = false;
+}
 </script>
 
 <style scoped>
@@ -800,5 +830,23 @@ function renderMarkdown(text) {
 :deep(.qa-question span .markdown-content),
 :deep(.qa-answer span .markdown-content) {
   display: inline;
+}
+
+/* Styles for voice input button */
+.input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.voice-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2em;
+}
+
+.microphone-icon {
+  color: #4f46e5; /* Indigo */
 }
 </style>

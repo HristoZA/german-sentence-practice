@@ -109,3 +109,34 @@ export async function askQuestionAboutFeedback(exercise, userAnswer, feedback, q
     throw error;
   }
 }
+
+/**
+ * Transcribes audio to text using the OpenAI API.
+ * @param {Blob} audioBlob - The audio blob to transcribe.
+ * @returns {Promise<string>} The transcribed text.
+ */
+export async function transcribeAudio(audioBlob) {
+  console.log('Sending audio for transcription');
+  
+  try {
+    const formData = new FormData();
+    formData.append("audio", audioBlob);
+    
+    const response = await fetch('/api/transcribe', {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Failed to transcribe audio: ${response.statusText} ${errorData.error || ''}`);
+    }
+    
+    const data = await response.json();
+    console.log('Received transcription from backend:', data);
+    return data.transcription;
+  } catch (error) {
+    console.error('Error in transcribeAudio:', error);
+    throw error;
+  }
+}

@@ -7,6 +7,14 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import * as fs from "fs";
 import * as path from "path";
 import { parse } from "csv-parse/sync";
+import multer from "multer";
+
+// Configure multer for handling audio file uploads
+const storage = multer.memoryStorage(); // Store files in memory
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // Limit to 25MB (OpenAI's max)
+});
 
 dotenv.config();
 
@@ -402,6 +410,82 @@ async function handleAnswerQuestion(
     throw new Error(`Failed to answer question with LLM: ${error.message}`);
   }
 }
+
+async function handleTranscribeAudio(
+  audioBuffer: Buffer,
+  fileType: string = "webm"
+): Promise<string> {
+  console.log(`Transcribing audio file of type ${fileType}...`);
+
+  try {
+    // Create a temporary file to store the audio buffer
+    const tempFilePath = path.join(
+      __dirname,
+      `temp_audio_${Date.now()}.${fileType}`
+    );
+    fs.writeFileSync(tempFilePath, audioBuffer);
+
+    // Log file size and existence for debugging
+    const stats = fs.statSync(tempFilePath);
+    console.log(
+      `Audio file created: ${tempFilePath}, Size: ${stats.size} bytes`
+    );
+
+    // Use OpenAI's transcription API with careful error handling
+    try {
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempFilePath),
+        model: "gpt-4o-mini-transcribe",
+        language: "de", // Specify German language
+        response_format: "text",
+      });
+
+      console.log("Transcription successful:", transcription);
+
+      // Clean up the temporary file
+      try {
+        fs.unlinkSync(tempFilePath);
+        console.log("Temporary file cleaned up:", tempFilePath);
+      } catch (cleanupError) {
+        console.error("Failed to clean up temporary file:", cleanupError);
+        // Non-fatal error, continue
+      }
+
+      return transcription;
+    } catch (apiError: any) {
+      // Log the specific API error
+      console.error("OpenAI API Error:", apiError);
+
+      // Clean up the temporary file even on error
+      try {
+        fs.unlinkSync(tempFilePath);
+      } catch (cleanupError) {
+        console.error(
+          "Failed to clean up temporary file after error:",
+          cleanupError
+        );
+      }
+
+      // Provide more specific error messages based on the API error
+      if (apiError.status === 400) {
+        throw new Error(
+          `OpenAI API Error (400): The audio file format might be unsupported or corrupted. OpenAI supports mp3, mp4, mpeg, mpga, m4a, wav, and webm formats.`
+        );
+      } else if (apiError.status === 401) {
+        throw new Error(
+          `OpenAI API Error (401): Authentication error. Please check your API key.`
+        );
+      } else {
+        throw new Error(
+          `OpenAI API Error (${apiError.status}): ${apiError.message}`
+        );
+      }
+    }
+  } catch (error: any) {
+    console.error("Error in handleTranscribeAudio:", error);
+    throw error; // Pass the error up
+  }
+}
 // --- End Helper Functions ---
 
 // --- API Route ---
@@ -447,6 +531,48 @@ app.post(
       res
         .status(500)
         .json({ error: error.message || "An internal server error occurred" });
+    }
+  }
+);
+
+// Audio transcription endpoint
+app.post(
+  "/api/transcribe",
+  upload.single("audio"),
+  async (req: Request, res: Response) => {
+    console.log("Received audio transcription request");
+
+    try {
+      if (!req.file) {
+        throw new Error("No audio file uploaded");
+      }
+
+      // Get file type from mimetype or filename
+      let fileType = "webm";
+      if (req.file.mimetype) {
+        const mimeTypeParts = req.file.mimetype.split("/");
+        if (mimeTypeParts.length > 1) {
+          fileType = mimeTypeParts[1];
+        }
+      } else if (req.file.originalname) {
+        const filenameParts = req.file.originalname.split(".");
+        if (filenameParts.length > 1) {
+          fileType = filenameParts[filenameParts.length - 1];
+        }
+      }
+
+      // Process the audio file and get transcription
+      const transcription = await handleTranscribeAudio(
+        req.file.buffer,
+        fileType
+      );
+
+      res.json({ transcription });
+    } catch (error: any) {
+      console.error("Audio transcription error:", error.message);
+      res
+        .status(500)
+        .json({ error: error.message || "Failed to transcribe audio" });
     }
   }
 );
