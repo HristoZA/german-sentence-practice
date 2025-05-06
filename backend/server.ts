@@ -265,6 +265,8 @@ The exercise topic was "${exercise.topic}", focusing on ${
     exercise.problemArea
   }, using keywords ${exercise.keyWords.join(", ")}.
 
+IMPORTANT: Be more lenient in your grading. If the sentence has proper grammar and vocabulary, and makes logical sense in German, consider it correct EVEN IF it doesn't perfectly match the intended category, problem area, or doesn't use all the suggested keywords. Focus primarily on whether the sentence is grammatically correct and natural in German.
+
 First, assess whether the sentence is correct (true/false) based on grammar, spelling, and proper use of the German language. The sentence should be grammatically correct and make sense in German.
 
 Then, provide:
@@ -289,7 +291,7 @@ Adhere strictly to the provided JSON schema.`;
         {
           role: "system",
           content:
-            "You are an assistant grading German language sentences. Respond in English.",
+            "You are an assistant grading German language sentences. Respond in English. Be lenient in your grading - if a sentence has proper grammar and makes sense, consider it correct even if it doesn't perfectly align with the exercise focus.",
         },
         { role: "user", content: prompt },
       ],
