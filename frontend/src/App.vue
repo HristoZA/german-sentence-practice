@@ -1,12 +1,53 @@
 <template>
   <div class="container">
-    <h1>
+    <!-- Settings button -->
+    <button @click="showSettingsModal = true" class="settings-button">
+      <span class="settings-icon">⚙️</span>
+      <span>Settings</span>
+    </button>
+
+    <!-- Settings Modal -->
+    <Modal v-model="showSettingsModal" title="Settings" size="medium">
+      <SettingsPanel
+        :user-profile="userProfile"
+        @update:level="handleLevelUpdate"
+        @update:focusArea="handleFocusAreaUpdate"
+      />
+      <template #footer>
+        <button class="primary" @click="showSettingsModal = false">
+          Save & Close
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Mode Switcher -->
+    <nav class="mode-switcher">
+      <button
+        @click="currentMode = 'standard'"
+        :class="{ active: currentMode === 'standard' }"
+      >
+        Standard Exercises
+      </button>
+      <button
+        @click="currentMode = 'practice'"
+        :class="{ active: currentMode === 'practice' }"
+      >
+        Practice Sentences
+      </button>
+    </nav>
+
+    <h1 v-if="currentMode === 'standard'">
       <span>German</span>
       <span class="brand-color">Sentence</span>
       <span>Practice</span>
     </h1>
+    <h1 v-else>
+      <span>Practice</span>
+      <span class="brand-color">Generated</span>
+      <span>Sentences</span>
+    </h1>
 
-    <main>
+    <main v-if="currentMode === 'standard'">
       <!-- Exercise Card -->
       <div class="card">
         <div class="card-header">
@@ -272,30 +313,22 @@
           </div>
         </div>
       </div>
+    </main>
 
-      <!-- Progress Section -->
-      <div class="card">
-        <div class="card-header">
-          <h2>Your Progress</h2>
-        </div>
-        <div class="card-content">
-          <ProgressDisplay
-            :user-profile="userProfile"
-            @update:level="handleLevelUpdate"
-            @update:focusArea="handleFocusAreaUpdate"
-          />
-        </div>
-      </div>
+    <main v-if="currentMode === 'practice'">
+      <PracticeMode />
     </main>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from "vue";
+import { ref, reactive, onMounted, computed, watch, provide } from "vue";
 import ExerciseDisplay from "./components/ExerciseDisplay.vue";
 import FeedbackDisplay from "./components/FeedbackDisplay.vue";
-import ProgressDisplay from "./components/ProgressDisplay.vue";
-import VoiceInput from "./components/VoiceInput.vue"; // Import the VoiceInput component
+import SettingsPanel from "./components/SettingsPanel.vue";
+import Modal from "./components/Modal.vue";
+import VoiceInput from "./components/VoiceInput.vue";
+import PracticeMode from "./components/PracticeMode.vue";
 import { fetchExercise, gradeSentence } from "./utils/llm.js";
 import {
   loadUserProfile,
@@ -306,12 +339,15 @@ import {
   loadExerciseHistory,
   addExerciseToHistory,
   recordExerciseAttempt,
-  updateAttemptQaHistory, // Import the new function
+  updateAttemptQaHistory,
   getExerciseAttempts,
   getRecentExercises,
   getIncompleteExercises,
 } from "./utils/exerciseHistory.js";
-import { marked } from "marked"; // Import the marked library
+import { marked } from "marked";
+
+// --- Modal State ---
+const showSettingsModal = ref(false);
 
 // --- State Variables ---
 const userProfile = reactive(loadUserProfile());
@@ -335,9 +371,15 @@ const isLoadingExercise = ref(false);
 const isGrading = ref(false);
 const error = ref(null);
 const inputError = ref(null);
-const currentAttemptQaHistory = ref([]); // Q&A history for current attempt
-const currentAttemptTimestamp = ref(null); // Timestamp of the current attempt
-const showVoiceInput = ref(false); // State to show/hide voice input
+const currentAttemptQaHistory = ref([]);
+const currentAttemptTimestamp = ref(null);
+const showVoiceInput = ref(false);
+
+// --- Mode State ---
+const currentMode = ref("standard");
+
+// Provide userProfile for child components
+provide("userProfile", userProfile);
 
 // --- Exercise History State ---
 const recentExercises = ref([]);
@@ -349,8 +391,7 @@ const showExerciseHistory = ref(false);
 // --- Computed property for input validation ---
 const isInputValid = computed(() => {
   const answer = userAnswer.value.trim();
-  if (!answer) return false; // Cannot be empty
-  // Basic check: at least 2 words or 5 characters
+  if (!answer) return false;
   return answer.split(" ").length >= 2 || answer.length >= 5;
 });
 
@@ -364,7 +405,6 @@ watch(
     } else {
       currentExerciseRecord.value = null;
     }
-    // Reset Q&A history when exercise changes
     currentAttemptQaHistory.value = [];
     currentAttemptTimestamp.value = null;
   },
@@ -374,7 +414,6 @@ watch(
 // --- Load history data on mount ---
 onMounted(() => {
   loadExerciseHistoryData();
-  // Generate a new exercise if we don't have one
   if (!currentExercise.exerciseId) {
     generateNewExercise();
   }
@@ -387,7 +426,6 @@ function loadExerciseHistoryData() {
 }
 
 function formatDate(date) {
-  // Format date as "MMM D, YYYY h:mm a" (e.g., "May 5, 2025 3:30 PM")
   if (!date) return "";
   return new Date(date).toLocaleString(undefined, {
     month: "short",
@@ -399,15 +437,14 @@ function formatDate(date) {
 }
 
 async function generateNewExercise() {
-  // --- Reset feedback state ---
   Object.assign(feedback, {
     isCorrect: null,
     score: null,
     feedback: "",
     review: "",
   });
-  currentAttemptQaHistory.value = []; // Reset Q&A history
-  currentAttemptTimestamp.value = null; // Reset timestamp
+  currentAttemptQaHistory.value = [];
+  currentAttemptTimestamp.value = null;
 
   isLoadingExercise.value = true;
   error.value = null;
@@ -419,11 +456,9 @@ async function generateNewExercise() {
     const newExercise = await fetchExercise(userProfile);
     Object.assign(currentExercise, newExercise);
 
-    // Add to exercise history
     const record = addExerciseToHistory(newExercise);
     currentExerciseRecord.value = record;
 
-    // Update history lists
     loadExerciseHistoryData();
   } catch (err) {
     console.error("Error fetching exercise:", err);
@@ -435,10 +470,8 @@ async function generateNewExercise() {
 }
 
 function loadHistoricalExercise(exercise) {
-  // Load an exercise from history
   Object.assign(currentExercise, exercise);
 
-  // Reset input state
   userAnswer.value = "";
   Object.assign(feedback, {
     isCorrect: null,
@@ -446,14 +479,12 @@ function loadHistoricalExercise(exercise) {
     feedback: "",
     review: "",
   });
-  currentAttemptQaHistory.value = []; // Reset Q&A history
-  currentAttemptTimestamp.value = null; // Reset timestamp
+  currentAttemptQaHistory.value = [];
+  currentAttemptTimestamp.value = null;
 
-  // Get the history record for this exercise
   const history = loadExerciseHistory();
   currentExerciseRecord.value = history[exercise.exerciseId] || null;
 
-  // Show the history by default when loading a historical exercise
   showExerciseHistory.value = true;
 }
 
@@ -474,39 +505,31 @@ async function submitAnswer() {
   isGrading.value = true;
   error.value = null;
   feedback.isCorrect = null;
-  // Reset Q&A history for new attempt
   currentAttemptQaHistory.value = [];
-  currentAttemptTimestamp.value = null; // Clear timestamp before making a new attempt
+  currentAttemptTimestamp.value = null;
 
   try {
     const gradingResult = await gradeSentence(currentExercise, answer);
 
-    // Record the attempt in history without Q&A initially
     const recordedAttempt = recordExerciseAttempt(
       currentExercise.exerciseId,
       answer,
       gradingResult
     );
 
-    // Store the timestamp of the attempt we just recorded
     currentAttemptTimestamp.value = recordedAttempt.timestamp;
     console.log(
       "Recorded attempt with timestamp:",
       currentAttemptTimestamp.value
     );
 
-    // Update the feedback state
     Object.assign(feedback, gradingResult);
 
-    // Reload the current exercise record
     const history = loadExerciseHistory();
     currentExerciseRecord.value = history[currentExercise.exerciseId] || null;
 
-    // Update history lists
     loadExerciseHistoryData();
 
-    // --- Update User Profile based on performance ---
-    // Only count this as a new exercise if it's the first attempt
     const attemptsCount = currentExerciseRecord.value?.attempts.length || 0;
     const isFirstAttempt = attemptsCount === 1;
 
@@ -518,7 +541,6 @@ async function submitAnswer() {
         problemAreas: [...userProfile.problemAreas],
       };
 
-      // Add problem area if answer is incorrect and it's not already listed
       if (
         !gradingResult.isCorrect &&
         currentExercise.problemArea &&
@@ -527,31 +549,27 @@ async function submitAnswer() {
         profileUpdates.problemAreas.push(currentExercise.problemArea);
       }
 
-      // Update the reactive object AND save to cookie
       Object.assign(userProfile, updateUserProfile(profileUpdates));
     }
   } catch (err) {
     console.error("Error grading sentence:", err);
     error.value =
       err.message || "Failed to grade the sentence. Please try again.";
-    // Reset feedback fully on error
     Object.assign(feedback, {
       isCorrect: null,
       score: null,
       feedback: "",
       review: "",
     });
-    currentAttemptTimestamp.value = null; // Reset timestamp on error
+    currentAttemptTimestamp.value = null;
   } finally {
     isGrading.value = false;
   }
 }
 
-// Function to handle updates from FeedbackDisplay
 function handleQaHistoryUpdate(newHistory) {
   currentAttemptQaHistory.value = newHistory;
 
-  // If we have a timestamp for the current attempt, update its Q&A history
   if (currentAttemptTimestamp.value && currentExercise.exerciseId) {
     console.log("Updating Q&A for attempt at:", currentAttemptTimestamp.value);
     updateAttemptQaHistory(
@@ -560,7 +578,6 @@ function handleQaHistoryUpdate(newHistory) {
       newHistory
     );
 
-    // Reload the current exercise record to reflect the Q&A updates immediately
     const history = loadExerciseHistory();
     currentExerciseRecord.value = history[currentExercise.exerciseId] || null;
   } else {
@@ -568,43 +585,35 @@ function handleQaHistoryUpdate(newHistory) {
   }
 }
 
-// --- Function to handle level update from ProgressDisplay ---
 function handleLevelUpdate(newLevel) {
   console.log("Updating level to:", newLevel);
-  // Update the reactive object AND save to cookie
   Object.assign(userProfile, updateUserProfile({ proficiencyLevel: newLevel }));
 }
 
-// --- Function to handle focus area update from ProgressDisplay ---
 function handleFocusAreaUpdate(newFocusArea) {
   console.log("Updating focus area to:", newFocusArea);
-  // Update the reactive object AND save to cookie
   Object.assign(userProfile, updateUserProfile({ focusArea: newFocusArea }));
 
-  // Generate a new exercise with the updated focus area
   if (newFocusArea) {
     generateNewExercise();
   }
 }
 
-// Function to safely render Markdown
 function renderMarkdown(text) {
   if (!text) return "";
   try {
-    // Set options for security and rendering
     marked.setOptions({
-      breaks: true, // Convert \n to <br>
-      gfm: true, // GitHub Flavored Markdown
-      sanitize: false, // We will handle sanitization separately if needed
+      breaks: true,
+      gfm: true,
+      sanitize: false,
     });
     return marked.parse(text);
   } catch (error) {
     console.error("Error rendering Markdown:", error);
-    return text; // Return original text if there's an error
+    return text;
   }
 }
 
-// Function to handle voice transcription
 function handleVoiceTranscription(transcription) {
   userAnswer.value = transcription;
   showVoiceInput.value = false;
@@ -613,6 +622,53 @@ function handleVoiceTranscription(transcription) {
 
 <style scoped>
 /* Add component-specific styles here if needed */
+
+.settings-button {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.settings-button:hover {
+  background-color: #e5e7eb;
+}
+
+.settings-icon {
+  font-size: 1.1rem;
+}
+
+.mode-switcher {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+  margin-top: 20px;
+  gap: 10px;
+}
+
+.mode-switcher button {
+  padding: 10px 15px;
+  border: 1px solid #ccc;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.mode-switcher button.active {
+  background-color: #4f46e5;
+  color: white;
+  border-color: #4f46e5;
+}
+
 .brand-color {
   color: #4f46e5; /* Indigo */
 }

@@ -140,3 +140,66 @@ export async function transcribeAudio(audioBlob) {
     throw error;
   }
 }
+
+/**
+ * Fetches a practice sentence from the LLM backend.
+ * @param {object} userProfile - The user's profile data (level, topic).
+ * @returns {Promise<object>} Object containing the practice sentence.
+ */
+export async function fetchPracticeSentence(userProfile) {
+  console.log(`Fetching practice sentence for level ${userProfile.proficiencyLevel}, topic ${userProfile.focusArea}`);
+  try {
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'generatePracticeSentence',
+        userProfile: {
+          proficiencyLevel: userProfile.proficiencyLevel,
+          focusArea: userProfile.focusArea,
+        },
+      }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Failed to fetch practice sentence: ${response.statusText} ${errorData.error || ''}`);
+    }
+    const data = await response.json();
+    console.log('Received practice sentence from backend:', data);
+    return data; // Expected: { sentence: "..." }
+  } catch (error) {
+    console.error('Error in fetchPracticeSentence:', error);
+    throw error;
+  }
+}
+
+/**
+ * Grades the user's attempt at reconstructing a practice sentence.
+ * @param {string} originalSentence - The sentence the user was asked to reconstruct.
+ * @param {string} userAnswer - The user's attempt.
+ * @returns {Promise<object>} Feedback on the attempt.
+ */
+export async function gradePracticeAttempt(originalSentence, userAnswer) {
+  console.log(`Grading practice attempt for sentence: "${originalSentence}" with answer: "${userAnswer}"`);
+  try {
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'gradePracticeAttempt',
+        originalSentence,
+        userAnswer,
+      }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(`Failed to grade practice attempt: ${response.statusText} ${errorData.error || ''}`);
+    }
+    const data = await response.json();
+    console.log('Received practice grading from backend:', data);
+    return data; // Expected: { feedback: "...", isCorrect: true/false, score: 0-100 }
+  } catch (error) {
+    console.error('Error in gradePracticeAttempt:', error);
+    throw error;
+  }
+}
